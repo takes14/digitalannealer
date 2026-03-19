@@ -1,0 +1,95 @@
+# Python
+_codeql_detected_source_root
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# UV package manager
+uv.lock.bak
+.cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# CMake/Build artifacts
+_skbuild/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!src/CMakeLists.txt
+!docs/Makefile
+compile_commands.json
+
+# CUDA/C++ compiled files
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Documentation build
+docs/_build/
+docs/.buildinfo
+site/
+
+# Logs
+*.log
+*.tmp
+
+# Local configuration
+.env
+.envrc
+
+# Test coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Profiling
+*.prof
+*.nvprof
+*.qdrep
+nsys-rep-*
+*.sqlite
+
+# Slurm output
+log_slurm/
+
+# benchmark outputs
+benchmarks/outputs/
+
+# night system monitor outputs
+nsys_reports/

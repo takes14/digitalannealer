@@ -1,0 +1,11 @@
+# Documentation build dependencies.
+# Used by ReadTheDocs (see ../.readthedocs.yaml) to install only the
+# Python dependencies needed for Sphinx, without compiling the C++/CUDA
+# extension (which requires the CUDA toolkit).
+# Keep Sphinx-related pins aligned with [project.optional-dependencies].docs
+# in ../pyproject.toml.
+sphinx>=7.4.7
+sphinx-rtd-theme>=3.1.0
+myst-parser>=3.0.1
+numpy>=2.0.2
+dimod>=0.12.21

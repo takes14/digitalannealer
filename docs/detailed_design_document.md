@@ -1,0 +1,1 @@
+source/architecture/detailed_design_document.md
