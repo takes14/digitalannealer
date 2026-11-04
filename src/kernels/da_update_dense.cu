@@ -63,7 +63,8 @@ __global__ void initRngStates(curandState* states, int n_states, uint64_t seed) 
 /**
  * @brief Initialize spins randomly to +1 or -1 using Philox RNG.
  *
- * No per-spin curandState needed — uses stateless Philox generation.
+ * No per-spin curandState needed — uses stateless Philox generation in a
+ * separate initialization domain shared by dense/sparse DA and PT.
  */
 __global__ void initSpinsKernel(int8_t* __restrict__ spins, int n_spins, int n_replicas,
                                 uint64_t seed) {
@@ -74,7 +75,7 @@ __global__ void initSpinsKernel(int8_t* __restrict__ spins, int n_spins, int n_r
     int8_t* my_spins = spins + replica * n_spins;
 
     for (int i = threadIdx.x; i < n_spins; i += blockDim.x) {
-        float r = philox_uniform<float>(seed, replica, i, 0);
+        float r = philox_uniform<float>(seed, replica, i, 0, PhiloxDomain::Initialization);
         my_spins[i] = (r < 0.5f) ? static_cast<int8_t>(-1) : static_cast<int8_t>(1);
     }
 }

@@ -7,12 +7,14 @@
  * persistent device memory.
  *
  * The Philox 4×32-10 generator produces 4 uint32s from a (counter, key) pair.
- * We encode:
- *   counter = {sweep, spin_index}
- *   key     = {seed_lo, replica_index}
+ * We pass cuRAND:
+ *   seed        = user-provided or resolved base seed
+ *   subsequence = {domain (1 bit), replica (31 bits), spin (32 bits)}
+ *   offset      = sweep
  *
  * This guarantees independent, non-overlapping streams for every
- * (replica, spin, sweep) triple without any global memory traffic for RNG state.
+ * (domain, replica, spin, sweep) address without any global memory traffic for
+ * RNG state. Initialization and acceptance use disjoint subsequence ranges.
  *
  * Reference: Salmon et al., "Parallel Random Numbers: As Easy as 1, 2, 3",
  * Proc. 2011 Int. Conf. High Performance Computing, Networking, Storage and Analysis.
@@ -23,14 +25,21 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 
+#include <cstdint>
 #include <type_traits>
 
 namespace digitalannealer {
 
+// Replica indices are non-negative ints, so subsequence bit 63 is free.
+enum class PhiloxDomain : uint64_t {
+    Acceptance = 0,
+    Initialization = 1ULL << 63,
+};
+
 /**
  * @brief Generate a uniform value in (0, 1] using Philox counter-based RNG.
  *
- * The 4-round Philox generator is invoked inline — no persistent state needed.
+ * The Philox4x32-10 generator is invoked inline — no persistent state needed.
  * This replaces the per-spin curandState load/store that previously dominated
  * global memory bandwidth in the inner sweep loop.
  *
@@ -43,20 +52,22 @@ namespace digitalannealer {
  * @param replica Replica index (blockIdx.x physical mapping)
  * @param spin    Spin index within the replica
  * @param sweep   Current sweep number (unsigned to avoid signed overflow UB)
+ * @param domain  Initialization or acceptance subsequence range
  * @return Uniform value in (0.0, 1.0]
  */
 template <typename FloatT>
 __device__ __forceinline__ FloatT philox_uniform(uint64_t seed, int replica, int spin,
-                                                 unsigned int sweep) {
+                                                 unsigned int sweep,
+                                                 PhiloxDomain domain = PhiloxDomain::Acceptance) {
     // Set up Philox 4x32 state on the fly.
     // curand_Philox4x32_10 is available in cuRAND device API.
     // We use the curand device API's Philox type directly.
     curandStatePhilox4_32_10_t state;
-    // subsequence encodes (replica, spin); offset encodes sweep.
-    // This guarantees each (replica, spin, sweep) gets a unique position
-    // in a 2^128-period stream.
+    // Keep the acceptance address unchanged, including replay within a sweep
+    // and sweep offsets across PT intervals. Initialization sets the unused
+    // high bit so it cannot overlap any acceptance subsequence.
     const unsigned long long subsequence =
-        static_cast<unsigned long long>(replica) * 0x100000000ULL +
+        static_cast<unsigned long long>(domain) | (static_cast<unsigned long long>(replica) << 32) |
         static_cast<unsigned long long>(static_cast<unsigned int>(spin));
     curand_init(seed, subsequence, static_cast<unsigned long long>(sweep), &state);
     // curand_uniform / curand_uniform_double returns (0, 1] for Philox
