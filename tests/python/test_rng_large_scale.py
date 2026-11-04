@@ -18,6 +18,59 @@ from .conftest import CUDA_AVAILABLE
 SKIP_CUDA = pytest.mark.skipif(not CUDA_AVAILABLE, reason="CUDA backend not available")
 
 
+@SKIP_CUDA
+class TestRngInitialization:
+    """Initialization must not constrain the first acceptance draw (issue #2)."""
+
+    @pytest.mark.parametrize(
+        "sampler_type", [DASampler, PTDASampler], ids=["da", "ptda"]
+    )
+    @pytest.mark.parametrize("sparse", [False, True], ids=["dense", "sparse"])
+    @pytest.mark.parametrize(
+        "dtype", [np.float32, np.float64], ids=["float32", "float64"]
+    )
+    def test_first_acceptance_independent_of_initial_spin(
+        self, sampler_type, sparse, dtype
+    ):
+        """One-spin uphill moves have the independent-RNG frequency and repeatability."""
+        num_reads = 4096
+        params = {
+            "num_sweeps": 1,
+            "num_reads": num_reads,
+            "beta_min": 0.5,
+            "beta_max": 0.5,
+            "offset_delta": 0.0,
+            "sparse": sparse,
+            "dtype": dtype,
+        }
+        num_replicas = 1
+        if sampler_type is PTDASampler:
+            num_replicas = 2
+            params.update(
+                num_replicas=num_replicas, exchange_interval=1, adapt_betas=False
+            )
+
+        sampler = sampler_type(seed=42)
+        result = sampler.sample_ising({0: -1.0}, {}, **params)
+        repeated = sampler.sample_ising({0: -1.0}, {}, **params)
+        np.testing.assert_array_equal(result.record, repeated.record)
+
+        # E(s) = -s: initial -1 always flips downhill, while initial +1
+        # flips uphill with probability exp(-1). Reusing the initialization
+        # draw makes the latter impossible because it is already >= 0.5.
+        probability = 0.5 * np.exp(-1.0)
+        # PT returns the lowest-energy replica, so all replicas must finish
+        # negative for the returned spin to be negative. There are no exchanges.
+        probability **= num_replicas
+        expected = num_reads * probability
+        sigma = np.sqrt(num_reads * probability * (1.0 - probability))
+        negative_count = np.count_nonzero(result.record.sample[:, 0] == -1)
+        assert abs(negative_count - expected) < 6.0 * sigma, (
+            f"Got {negative_count} negative spins; expected {expected:.1f} "
+            f"within six standard deviations ({6.0 * sigma:.1f})"
+        )
+
+
 def _make_random_ising(n_spins: int, rng_seed: int = 0):
     """Create a random fully-connected Ising problem (dense)."""
     rng = np.random.default_rng(rng_seed)
